@@ -77,7 +77,7 @@ def _compile_proto(ctx, target, attr):
         resolver = _library_to_source,
         srcs = go_srcs,
         deps = go_deps + compiler.deps,
-        importpath_aliases = tuple([go.importpath.replace("_proto", "_go_proto")]),
+        #importpath_aliases = tuple([go.importpath.replace("_proto", "_go_proto")]),
     )
     source = go.library_to_source(go, ctx.attr, library, False)
     archive = go.archive(go, source)
@@ -123,11 +123,29 @@ def _go_proto_library_impl(ctx):
         fail("'protos' attribute must contain exactly one element. Got %s." % len(ctx.attr.protos))
     proto = ctx.attr.protos[0]
 
+    go = go_context(ctx)
+
+    direct = dict()
+    for src in proto[ProtoInfo].check_deps_sources.to_list():
+        direct["{}={}".format(proto_path(src, proto[ProtoInfo]), go.importpath)] = True
+    imports = depset(direct = direct.keys(), transitive = [proto[GoProtoImports].imports])
+
+    library = go.new_library(
+        go,
+        embed = proto[GoProtoInfo].archive,
+        importpath = proto[GoProtoInfo].library.importpath,
+        importpath_aliases = tuple([
+            go.importpath,
+        ]),
+    )
+    source = go.library_to_source(go, ctx.attr, library, False)
+    archive = go.archive(go, source)
+
     return [
-        proto[GoProtoImports],
-        proto[GoProtoInfo].library,
-        proto[GoProtoInfo].source,
-        proto[GoProtoInfo].archive,
+        GoProtoImports(imports = imports),
+        library,
+        source,
+        archive,
     ]
 
 go_proto_library = rule(
@@ -138,6 +156,9 @@ go_proto_library = rule(
             aspects = [_go_proto_aspect],
             mandatory = True,
         ),
+        "_go_context_data": attr.label(
+            default = "//:go_context_data",
+        ),
     },
     provides = [
         GoProtoImports,  # This is used by go_grpc_library to determine importpaths for proto deps
@@ -145,6 +166,7 @@ go_proto_library = rule(
         GoSource,
         GoArchive,
     ],
+    toolchains = [GO_TOOLCHAIN],
 )
 
 def _go_grpc_library_impl(ctx):
