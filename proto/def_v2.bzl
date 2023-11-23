@@ -77,6 +77,7 @@ def _compile_proto(ctx, target, attr):
         resolver = _library_to_source,
         srcs = go_srcs,
         deps = go_deps + compiler.deps,
+        importpath_aliases = tuple([go.importpath.replace("_proto", "_go_proto")]),
     )
     source = go.library_to_source(go, ctx.attr, library, False)
     archive = go.archive(go, source)

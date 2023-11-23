@@ -172,12 +172,14 @@ def _tool_args(go):
     args.set_param_file_format("shell")
     return args
 
-def _new_library(go, name = None, importpath = None, resolver = None, importable = True, testfilter = None, is_main = False, **kwargs):
+def _new_library(go, name = None, importpath = None, importpath_aliases = None, resolver = None, importable = True, testfilter = None, is_main = False, **kwargs):
     if not importpath:
         importpath = go.importpath
         importmap = go.importmap
     else:
         importmap = importpath
+    if not importpath_aliases:
+        importpath_aliases = go.importpath_aliases
     pathtype = go.pathtype
     if not importable and pathtype == EXPLICIT_PATH:
         pathtype = EXPORT_PATH
@@ -187,7 +189,7 @@ def _new_library(go, name = None, importpath = None, resolver = None, importable
         label = go.label,
         importpath = importpath,
         importmap = importmap,
-        importpath_aliases = go.importpath_aliases,
+        importpath_aliases = importpath_aliases,
         pathtype = pathtype,
         resolve = resolver,
         testfilter = testfilter,
