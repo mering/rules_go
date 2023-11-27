@@ -56,7 +56,13 @@ def _library_to_source(_go, attr, source, merge):
     if GoSource in compiler:
         merge(source, compiler[GoSource])
 
-def _compile_proto(ctx, target, attr):
+def _filter_deps(deps, embed):
+    if embed == None:
+        return deps
+
+    return [dep for dep in deps if dep[GoLibrary].importpath not in embed[GoLibrary].importpath]
+
+def _compile_proto(ctx, target, attr, library_kwargs = {}):
     go = go_context(ctx)
     go_srcs = []
     proto_info = target[ProtoInfo]
@@ -71,14 +77,16 @@ def _compile_proto(ctx, target, attr):
             importpath = go.importpath,
         ))
 
-    go_deps = getattr(attr, "deps", [])
+    go_deps = getattr(attr, "deps", []) + compiler.deps
     library = go.new_library(
         go,
         resolver = _library_to_source,
         srcs = go_srcs,
-        deps = go_deps + compiler.deps,
+        deps = _filter_deps(go_deps, library_kwargs.get("embed", None)),
         #importpath_aliases = tuple([go.importpath.replace("_proto", "_go_proto")]),
+        **library_kwargs
     )
+    print(ctx.label.name, library)
     source = go.library_to_source(go, ctx.attr, library, False)
     archive = go.archive(go, source)
     return {
@@ -142,6 +150,7 @@ def _go_proto_library_impl(ctx):
     archive = go.archive(go, source)
 
     return [
+        #proto[GoProtoImports],
         GoProtoImports(imports = imports),
         library,
         source,
@@ -172,8 +181,21 @@ go_proto_library = rule(
 def _go_grpc_library_impl(ctx):
     if len(ctx.attr.protos) != 1:
         fail("protos attribute must be exactly one target")
+    proto = ctx.attr.protos[0]
+    if len(ctx.attr.deps) != 1:
+        fail("deps attribute must be exactly one target")
+    dep = ctx.attr.deps[0]
 
-    providers = _compile_proto(ctx, ctx.attr.protos[0], ctx.attr)
+    # TODO try to embed the aspect provider like in rules, embed of embed might have been the problem why previous trial didn't work
+    go = go_context(ctx)
+    library_kwargs = {
+        "embed": dep,
+        "importpath": dep[GoLibrary].importpath,
+        "importpath_aliases": dep[GoLibrary].importpath_aliases + tuple([
+            go.importpath,
+        ]),
+    }
+    providers = _compile_proto(ctx, proto, ctx.attr, library_kwargs)
 
     return [
         providers["info"].library,
